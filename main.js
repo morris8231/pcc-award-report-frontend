@@ -65,8 +65,8 @@ btnGenerate.addEventListener('click', async () => {
 
 function startListeningProgress() {
   stopListeningProgress();
-  eventSource = new EventSource('/progress');
-
+  eventSource = const es = new EventSource(`${API_BASE}/progress`);
+  
   eventSource.onmessage = (e) => {
     const data = JSON.parse(e.data);
 
