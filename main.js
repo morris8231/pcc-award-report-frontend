@@ -48,7 +48,7 @@ btnGenerate.addEventListener('click', async () => {
   startListeningProgress();
 
   try {
-    const res = await fetch('/generate', {
+    fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, endDate })
