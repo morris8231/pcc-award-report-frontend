@@ -1,3 +1,5 @@
+const API_BASE = 'https://pcc-award-report-backend.onrender.com';
+
 const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 const btnGenerate = document.getElementById('btnGenerate');
