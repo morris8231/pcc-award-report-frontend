@@ -1,33 +1,38 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta charset="utf-8">
   <title>政府電子採購案_報表轉換</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js 用於長條圖 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>政府電子採購案_報表轉換</h1>
-
-    <div class="controls">
-      <label>開始日期：<input type="date" id="startDate"></label>
-      <label>結束日期：<input type="date" id="endDate"></label>
-      <button id="btnGenerate">產生新報表</button>
-    </div>
-
-    <div id="progressSection" class="hidden">
-      <p id="progressText">準備開始…</p>
-      <div class="progress-bar-wrap">
-        <div id="progressBar" class="progress-bar"></div>
-      </div>
-      <canvas id="progressChart" width="400" height="200"></canvas>
-    </div>
-
-    <h2>歷史報表</h2>
-    <ul id="historyList"></ul>
+  <h1>政府電子採購案_報表轉換</h1>
+  <div class="controls">
+    <label>
+      開始日期：
+      <input type="date" id="startDate">
+    </label>
+    <label>
+      結束日期：
+      <input type="date" id="endDate">
+    </label>
+    <button id="btnGenerate">產生新報表</button>
   </div>
+  <!-- 備註：資料為每月1日到15日、16日到月底 -->
+  <p class="note">備註：政府採購決標資料為兩週一期，分為每月 1 日至 15 日、16 日至月底。</p>
+
+  <div id="progressSection" class="hidden">
+    <p id="progressText">準備開始…</p>
+    <div id="progressBar"></div>
+    <div class="chartWrap">
+      <canvas id="progressChart"></canvas>
+    </div>
+  </div>
+
+  <h2>歷史報表</h2>
+  <ul id="historyList"></ul>
 
   <script src="main.js"></script>
 </body>
