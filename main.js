@@ -1,3 +1,6 @@
+// main.js
+// 放置在 pcc-award-report-frontend 專案中，與 index.html 同目錄
+
 const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 const btnGenerate = document.getElementById('btnGenerate');
@@ -6,8 +9,7 @@ const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const historyList = document.getElementById('historyList');
 
-// 【重要】請將此網址換成你的 Render 後端網址
-// 格式如：https://pcc-award-report-backend.onrender.com
+// 請將此網址改成你的 Render 後端網址
 const API_BASE = 'https://pcc-award-report-backend.onrender.com';
 
 let chart = null;
@@ -50,13 +52,11 @@ btnGenerate.addEventListener('click', async () => {
   startListeningProgress();
 
   try {
-    // 這裡改用 API_BASE
     const res = await fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, endDate })
     });
-
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.message || '產生報表失敗');
   } catch (e) {
@@ -68,9 +68,7 @@ btnGenerate.addEventListener('click', async () => {
 
 function startListeningProgress() {
   stopListeningProgress();
-  // SSE 連線也要加上 API_BASE
   eventSource = new EventSource(`${API_BASE}/progress`);
-
   eventSource.onmessage = (e) => {
     const data = JSON.parse(e.data);
 
@@ -92,7 +90,6 @@ function startListeningProgress() {
       fetchHistory();
     }
   };
-
   eventSource.onerror = () => {
     stopListeningProgress();
     btnGenerate.disabled = false;
@@ -110,24 +107,18 @@ function stopListeningProgress() {
 async function fetchHistory() {
   historyList.innerHTML = '';
   try {
-    // 這裡改用 API_BASE
     const res = await fetch(`${API_BASE}/history`);
     const history = await res.json();
-
     if (!Array.isArray(history) || history.length === 0) {
       historyList.innerHTML = '<li>暫無歷史報表</li>';
       return;
     }
-
     history.forEach(item => {
       const li = document.createElement('li');
-
-      // 下載連結也要加上 API_BASE
       const a1 = document.createElement('a');
       a1.href = `${API_BASE}/download/${encodeURIComponent(item.file)}`;
       a1.textContent = `${item.file}（Summary ${item.summaryCount} / Raw ${item.rawCount}）`;
       li.appendChild(a1);
-
       historyList.appendChild(li);
     });
   } catch {
