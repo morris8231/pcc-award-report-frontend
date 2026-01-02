@@ -11,7 +11,7 @@ const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const historyList = document.getElementById('historyList');
 
-// 初始化日期
+// 初始化日期（預設過去一個月）
 (function initDates() {
   const now = new Date();
   const endDateStr = now.toISOString().split('T')[0];
@@ -57,7 +57,7 @@ function startListeningProgress() {
     progressBar.style.width = `${data.percent}%`;
     progressText.textContent = `已處理 ${data.current} / ${data.total} 份資料（${data.percent}%）` +
       (data.complete ? `（完成：${data.reportFile}）` : '');
-    // 繪製長條圖
+    // 更新長條圖
     if (window.progressChart) {
       progressChart.data.labels = data.labels;
       progressChart.data.datasets[0].data = data.counts;
@@ -109,14 +109,12 @@ btnGenerate.addEventListener('click', async () => {
   progressChart.data.labels = [];
   progressChart.data.datasets[0].data = [];
   progressChart.update();
-  // 呼叫後端產生報表
   try {
     await fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, endDate })
     });
-    // 啟動 SSE 監聽進度
     startListeningProgress();
   } catch {
     alert('產生報表失敗');
