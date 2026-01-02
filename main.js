@@ -1,12 +1,8 @@
-/* main.js
- * 這份前端腳本負責選取日期、呼叫後端產生報表、即時監聽進度條，以及載入歷史報表列表並提供下載。
- * 修改重點：
- * - 新增 API_BASE 常數，指向部署在 Render 的後端服務。
- * - 所有 fetch/EventSource 路徑改為 `${API_BASE}/xxx`。
- */
+// 動態決定 API_BASE：GitHub Pages 時使用 Render 的後端，否則用同源
+const isGithubPages = location.hostname.endsWith('github.io');
+const API_BASE = isGithubPages ? 'https://pcc-award-report-backend.onrender.com' : '';
 
-const API_BASE = 'https://pcc-award-report-backend.onrender.com';
-
+// DOM 參考
 const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 const btnGenerate = document.getElementById('btnGenerate');
@@ -15,134 +11,114 @@ const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const historyList = document.getElementById('historyList');
 
-let eventSource = null;
+// 初始化日期
+(function initDates() {
+  const now = new Date();
+  const endDateStr = now.toISOString().split('T')[0];
+  const prior = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+  const startDateStr = prior.toISOString().split('T')[0];
+  startDateInput.value = startDateStr;
+  endDateInput.value = endDateStr;
+})();
 
-/**
- * 初始化進度區域並監聽後端 SSE
- */
-function startListeningProgress() {
-  // 若已有連線，先關閉
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
-  // 建立 EventSource 至後端 progress
-  eventSource = new EventSource(`${API_BASE}/progress`);
-
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (!data) return;
-
-      // 更新進度文字
-      progressText.textContent = data.message || `${data.percent}%`;
-      // 更新進度條寬度
-      progressBar.style.width = `${data.percent}%`;
-
-      // 若已完成，關閉 SSE 連線並更新歷史清單
-      if (data.complete) {
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
-        }
-        // 加載最新歷史報表
-        fetchHistory();
-      }
-    } catch (e) {
-      console.error('解析 progress 資料錯誤：', e);
-    }
-  };
-
-  eventSource.onerror = (err) => {
-    console.error('SSE 連線發生錯誤：', err);
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-  };
-}
-
-/**
- * 從後端取得歷史報表，並建立清單顯示
- */
-async function fetchHistory() {
+// 取得歷史報表
+async function loadHistory() {
   historyList.innerHTML = '';
   try {
     const res = await fetch(`${API_BASE}/history`);
-    if (!res.ok) throw new Error('無法取得歷史紀錄');
-
-    const history = await res.json();
-    if (Array.isArray(history) && history.length > 0) {
-      history.forEach(item => {
-        const listItem = document.createElement('li');
-        listItem.className = 'history-item';
-
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = `${item.file}（Summary ${item.summaryCount} / Raw ${item.rawCount}）`;
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          // 開新視窗下載報表
-          window.open(`${API_BASE}/download/${encodeURIComponent(item.file)}`, '_blank');
-        });
-
-        listItem.appendChild(link);
-        historyList.appendChild(listItem);
-      });
-    } else {
-      const empty = document.createElement('li');
-      empty.textContent = '尚無歷史報表';
-      historyList.appendChild(empty);
-    }
-  } catch (err) {
-    console.error(err);
-    const errorItem = document.createElement('li');
-    errorItem.textContent = '載入歷史報表失敗';
-    historyList.appendChild(errorItem);
+    const items = await res.json();
+    items.forEach(item => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = `${API_BASE}/download/${encodeURIComponent(item.file)}`;
+      a.textContent = item.file;
+      li.textContent = `${item.file} (Summary ${item.summaryCount} / Raw ${item.rawCount}) `;
+      li.appendChild(a);
+      historyList.appendChild(li);
+    });
+  } catch {
+    const li = document.createElement('li');
+    li.textContent = '載入歷史報表失敗。';
+    historyList.appendChild(li);
   }
 }
+loadHistory();
 
-/**
- * 產生新報表：取日期並呼叫後端 /generate，並顯示進度
- */
-async function generateReport() {
+// SSE 監聽進度
+let evtSource;
+function startListeningProgress() {
+  if (evtSource) {
+    evtSource.close();
+  }
+  evtSource = new EventSource(`${API_BASE}/progress`);
+  evtSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    // 更新進度條與文字
+    progressBar.style.width = `${data.percent}%`;
+    progressText.textContent = `已處理 ${data.current} / ${data.total} 份資料（${data.percent}%）` +
+      (data.complete ? `（完成：${data.reportFile}）` : '');
+    // 繪製長條圖
+    if (window.progressChart) {
+      progressChart.data.labels = data.labels;
+      progressChart.data.datasets[0].data = data.counts;
+      progressChart.update();
+    }
+    if (data.complete) {
+      evtSource.close();
+      loadHistory();
+    }
+  };
+  evtSource.onerror = function () {
+    evtSource.close();
+  };
+}
+
+// 初始化圖表
+let progressChart;
+function initChart() {
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  progressChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: '各檔案讀取筆數',
+        data: [],
+        backgroundColor: '#3798e4'
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+initChart();
+
+// 點擊產生報表
+btnGenerate.addEventListener('click', async () => {
   const startDate = startDateInput.value;
   const endDate = endDateInput.value;
-  if (!startDate || !endDate) {
-    alert('請輸入開始日期和結束日期');
-    return;
-  }
-
-  // 顯示進度區域
-  progressSection.style.display = 'block';
+  if (!startDate || !endDate) return alert('請填寫日期');
+  // 重置進度 UI
+  progressSection.classList.remove('hidden');
   progressBar.style.width = '0%';
-  progressText.textContent = '準備開始…';
-
-  // 監聽後端即時進度
-  startListeningProgress();
-
+  progressText.textContent = '開始處理…';
+  progressChart.data.labels = [];
+  progressChart.data.datasets[0].data = [];
+  progressChart.update();
+  // 呼叫後端產生報表
   try {
-    const response = await fetch(`${API_BASE}/generate`, {
+    await fetch(`${API_BASE}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, endDate })
     });
-
-    if (!response.ok) {
-      throw new Error(`後端回應錯誤：${response.status}`);
-    }
-    // 後端在產生中，進度由 SSE 更新，不需要再處理 response body
-  } catch (err) {
-    console.error(err);
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    progressText.textContent = '產生報表失敗';
-    alert('產生報表失敗，請稍後再試');
+    // 啟動 SSE 監聽進度
+    startListeningProgress();
+  } catch {
+    alert('產生報表失敗');
   }
-}
-
-// 綁定按鈕事件與載入初始歷史資料
-btnGenerate.addEventListener('click', generateReport);
-fetchHistory();
+});
